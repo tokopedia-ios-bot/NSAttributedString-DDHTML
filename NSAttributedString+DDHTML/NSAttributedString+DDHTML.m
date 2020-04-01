@@ -304,6 +304,10 @@
             }
             
             [nodeAttributedString addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:nodeAttributedStringRange];
+            
+            if ([attributeDictionary objectForKey:@"style"]) {
+                [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:nodeAttributedStringRange];
+            }
 			
 			// MR - For some reason they are not adding the paragraph space when parsing the <p> tag
 			[nodeAttributedString appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
@@ -311,7 +315,7 @@
 
 
         // Links
-        else if (strncmp("a href", (const char *)xmlNode->name, strlen((const char *)xmlNode->name)) == 0) {
+        else if (strncmp("a", (const char *)xmlNode->name, strlen((const char *)xmlNode->name)) == 0) {
             
             xmlChar *value = xmlNodeListGetString(xmlNode->doc, xmlNode->xmlChildrenNode, 1);
             if (value)
@@ -319,11 +323,14 @@
                 NSString *title = [NSString stringWithCString:(const char *)value encoding:NSUTF8StringEncoding];
                 NSString *link = attributeDictionary[@"href"];
                 // Sometimes, an a tag may not have a corresponding href attribute.
-		// This should not be added as an attribute.
-		if (link)
-		{
-                    [nodeAttributedString addAttribute:NSLinkAttributeName value:link range:NSMakeRange(0, title.length)];
-		}
+                // This should not be added as an attribute.
+                if (link) {
+                    [nodeAttributedString addAttribute:NSLinkAttributeName value:link ?: @"" range:NSMakeRange(0, title.length)];
+                }
+                
+                if ([attributeDictionary objectForKey:@"style"]) {
+                    [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:NSMakeRange(0, title.length)];
+                }
             }
         }
         
@@ -357,9 +364,38 @@
                 }
             #endif
         }
+        
+        // span tag
+        else if (strncmp("span", (const char *)xmlNode->name, strlen((const char *)xmlNode->name)) == 0) {
+            if ([attributeDictionary objectForKey:@"style"]) {
+                [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:nodeAttributedStringRange];
+            }
+        }
     }
     
     return nodeAttributedString;
+}
+
++ (void)handleInlineStyle:(NSString *)style string:(NSMutableAttributedString *)string range:(NSRange)range {
+    NSArray *styleAttributes = [style componentsSeparatedByString:@";"];
+    for (NSString *styleAttribute in styleAttributes) {
+        NSArray *attribute = [styleAttribute componentsSeparatedByString:@":"];
+        if (attribute.count > 1) {
+            NSString *key = [attribute[0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *value = [attribute[1]  stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            
+            if ([key isEqualToString:@"color"]) {
+                if ([value hasPrefix:@"#"]) {
+                    UIColor *foregroundColor = [self colorFromHexString:value];
+                    [string addAttribute:NSForegroundColorAttributeName value:foregroundColor range:range];
+                }
+                else if ([value hasPrefix:@"rgb"]) {
+                    UIColor *foregroundColor = [self colorFromRGBString:value];
+                    [string addAttribute:NSForegroundColorAttributeName value:foregroundColor range:range];
+                }
+            }
+        }
+    }
 }
 
 + (UIFont *)fontOrSystemFontForName:(NSString *)fontName size:(CGFloat)fontSize {
@@ -380,6 +416,36 @@
     NSUInteger hexValue = strtoul([hexString cStringUsingEncoding:NSUTF8StringEncoding], &p, 16);
 
     return [UIColor colorWithRed:((hexValue & 0xff0000) >> 16) / 255.0 green:((hexValue & 0xff00) >> 8) / 255.0 blue:(hexValue & 0xff) / 255.0 alpha:1.0];
+}
+
++ (UIColor *)colorFromRGBString:(NSString *)colorString {
+    if (colorString == nil)
+        return nil;
+    
+    colorString = [colorString stringByReplacingOccurrencesOfString:@"rgba(" withString:@""];
+    colorString = [colorString stringByReplacingOccurrencesOfString:@"rgb(" withString:@""];
+    colorString = [colorString stringByReplacingOccurrencesOfString:@")" withString:@""];
+    colorString = [colorString stringByReplacingOccurrencesOfString:@" " withString:@""];
+    
+    NSArray *colorComponents = [colorString componentsSeparatedByString:@","];
+    double red = 0;
+    double blue = 0;
+    double green = 0;
+    double alpha = 0;
+    if (colorComponents.count > 0) {
+        red = [colorComponents[0] doubleValue];
+    }
+    if (colorComponents.count > 1) {
+        blue = [colorComponents[1] doubleValue];
+    }
+    if (colorComponents.count > 2) {
+        green = [colorComponents[2] doubleValue];
+    }
+    if (colorComponents.count > 3) {
+        alpha = [colorComponents[3] doubleValue];
+    }
+    
+    return [UIColor colorWithRed:red / 255.0 green:green / 255.0 blue:blue / 255.0 alpha:alpha];
 }
 
 @end
