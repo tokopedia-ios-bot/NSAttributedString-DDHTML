@@ -41,15 +41,17 @@
                                normalFont:preferredBodyFont
                                  boldFont:[UIFont boldSystemFontOfSize:preferredBodyFont.pointSize]
                                italicFont:[UIFont italicSystemFontOfSize:preferredBodyFont.pointSize]
+                                textColor:[UIColor blackColor]
                                 linkColor:[UIColor blackColor]];
 }
 
-+ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont linkColor:(UIColor *)linkColor
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
 {
     return [self attributedStringFromHTML:htmlString
                                normalFont:normalFont
                                  boldFont:boldFont
                                italicFont:[UIFont italicSystemFontOfSize:normalFont.pointSize]
+                                textColor:textColor
                                 linkColor:linkColor];
 }
 
@@ -59,6 +61,7 @@
                                normalFont:[UIFont preferredFontForTextStyle:UIFontTextStyleBody]
                                  boldFont:boldFont
                                italicFont:italicFont
+                                textColor:[UIColor blackColor]
                                 linkColor:[UIColor blackColor]];
 }
 
@@ -69,20 +72,22 @@
                                  boldFont:boldFont
                                italicFont:italicFont
                                  imageMap:@{}
+                                textColor:[UIColor blackColor]
                                 linkColor:[UIColor blackColor]];
 }
 
-+ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont linkColor:(UIColor *)linkColor
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
 {
     return [self attributedStringFromHTML:htmlString
                                normalFont:normalFont
                                  boldFont:boldFont
                                italicFont:italicFont
                                  imageMap:@{}
+                                textColor:textColor
                                 linkColor:linkColor];
 }
 
-+ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap linkColor:(UIColor *)linkColor
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
 {
     NSString *newString = [self stringByDecodingHTMLEntities:htmlString];
     
@@ -98,7 +103,7 @@
     
     xmlNodePtr currentNode = document->children;
     while (currentNode != NULL) {
-        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap linkColor:linkColor];
+        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap textColor:textColor linkColor:linkColor];
         [finalAttributedString appendAttributedString:childString];
         
         currentNode = currentNode->next;
@@ -109,19 +114,22 @@
     return finalAttributedString;
 }
 
-+ (NSAttributedString *)attributedStringFromNode:(xmlNodePtr)xmlNode normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap linkColor:(UIColor *)linkColor
++ (NSAttributedString *)attributedStringFromNode:(xmlNodePtr)xmlNode normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
 {
     NSMutableAttributedString *nodeAttributedString = [[NSMutableAttributedString alloc] init];
     
     if ((xmlNode->type != XML_ENTITY_REF_NODE) && ((xmlNode->type != XML_ELEMENT_NODE) && xmlNode->content != NULL)) {
-        NSAttributedString *normalAttributedString = [[NSAttributedString alloc] initWithString:[NSString stringWithCString:(const char *)xmlNode->content encoding:NSUTF8StringEncoding] attributes:@{NSFontAttributeName : normalFont}];
+        NSAttributedString *normalAttributedString = [[NSAttributedString alloc] initWithString:[NSString stringWithCString:(const char *)xmlNode->content encoding:NSUTF8StringEncoding] attributes:@{
+            NSFontAttributeName:normalFont,
+            NSForegroundColorAttributeName:textColor
+        }];
         [nodeAttributedString appendAttributedString:normalAttributedString];
     }
     
     // Handle children
     xmlNodePtr currentNode = xmlNode->children;
     while (currentNode != NULL) {
-        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap linkColor:linkColor];
+        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap textColor:textColor linkColor:linkColor];
         [nodeAttributedString appendAttributedString:childString];
         
         currentNode = currentNode->next;
@@ -354,7 +362,11 @@
                     [nodeAttributedString addAttribute:NSLinkAttributeName value:link ?: @"" range:range];
                 }
                 
-                [nodeAttributedString addAttribute:NSForegroundColorAttributeName value:linkColor range:range];
+                [nodeAttributedString addAttributes:@{
+                    NSForegroundColorAttributeName: linkColor,
+                    NSFontAttributeName: boldFont,
+                    NSUnderlineColorAttributeName: [UIColor clearColor]
+                } range:range];
                 
                 if ([attributeDictionary objectForKey:@"style"]) {
                     [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:range];
