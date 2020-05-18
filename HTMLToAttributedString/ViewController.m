@@ -27,6 +27,7 @@
                                                                        normalFont:[UIFont systemFontOfSize:12]
                                                                          boldFont:[UIFont boldSystemFontOfSize:12]
                                                                        italicFont:[UIFont italicSystemFontOfSize:12.0]
+                                                                        linkColor:[UIColor blackColor]
                                       ];
     self.label.attributedText = attrString;
 }
