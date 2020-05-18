@@ -61,6 +61,17 @@
                                italicFont:italicFont
                                 linkColor:[UIColor blackColor]];
 }
+
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont
+{
+    return [self attributedStringFromHTML:htmlString
+                               normalFont:normalFont
+                                 boldFont:boldFont
+                               italicFont:italicFont
+                                 imageMap:@{}
+                                linkColor:[UIColor blackColor]];
+}
+
 + (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont linkColor:(UIColor *)linkColor
 {
     return [self attributedStringFromHTML:htmlString
