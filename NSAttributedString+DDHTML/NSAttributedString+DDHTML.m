@@ -359,7 +359,14 @@
                 // Sometimes, an a tag may not have a corresponding href attribute.
                 // This should not be added as an attribute.
                 if (link) {
-                    [nodeAttributedString addAttribute:NSLinkAttributeName value:link ?: @"" range:range];
+                    NSURL *url = [[NSURL alloc] initWithString:link];
+
+                    // test if this url is valid or not. if not, don't add
+                    NSURLRequest *req = [NSURLRequest requestWithURL:url];
+                    bool valid = [NSURLConnection canHandleRequest:req];
+                    if (valid) {
+                        [nodeAttributedString addAttribute:NSLinkAttributeName value:url range:range];
+                    }
                 }
                 
                 [nodeAttributedString addAttributes:@{
