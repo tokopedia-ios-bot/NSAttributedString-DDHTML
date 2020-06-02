@@ -362,9 +362,7 @@
                     NSURL *url = [[NSURL alloc] initWithString:link];
 
                     // test if this url is valid or not. if not, don't add
-                    NSURLRequest *req = [NSURLRequest requestWithURL:url];
-                    bool valid = [NSURLConnection canHandleRequest:req];
-                    if (valid) {
+                    if (url && url.scheme && url.host) {
                         [nodeAttributedString addAttribute:NSLinkAttributeName value:url range:range];
                     }
                 }
