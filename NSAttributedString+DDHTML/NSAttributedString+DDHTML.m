@@ -93,7 +93,7 @@
     
     // Parse HTML string as XML document using UTF-8 encoding
     NSData *documentData = [newString dataUsingEncoding:NSUTF8StringEncoding];
-    xmlDoc *document = htmlReadMemory(documentData.bytes, (int)documentData.length, nil, "UTF-8", HTML_PARSE_NOWARNING | HTML_PARSE_NOERROR | HTML_PARSE_NOBLANKS);
+    xmlDoc *document = htmlReadMemory(documentData.bytes, (int)documentData.length, nil, "UTF-8", HTML_PARSE_NOWARNING | HTML_PARSE_NOERROR);
     
     if (document == NULL) {
         return [[NSAttributedString alloc] initWithString:newString attributes:nil];
@@ -119,15 +119,12 @@
     NSMutableAttributedString *nodeAttributedString = [[NSMutableAttributedString alloc] init];
     
     if ((xmlNode->type != XML_ENTITY_REF_NODE) && ((xmlNode->type != XML_ELEMENT_NODE) && xmlNode->content != NULL)) {
-        NSString *string = [[NSString stringWithCString:(const char *)xmlNode->content encoding:NSUTF8StringEncoding] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        NSAttributedString *normalAttributedString = [[NSAttributedString alloc] initWithString:[NSString stringWithCString:(const char *)xmlNode->content encoding:NSUTF8StringEncoding] attributes:@{
+            NSFontAttributeName:normalFont,
+            NSForegroundColorAttributeName:textColor
+        }];
         
-        if (string.length > 0) {
-            NSAttributedString *normalAttributedString = [[NSAttributedString alloc] initWithString:string attributes:@{
-                NSFontAttributeName:normalFont,
-                NSForegroundColorAttributeName:textColor
-            }];
-            [nodeAttributedString appendAttributedString:normalAttributedString];
-        }
+        [nodeAttributedString appendAttributedString:normalAttributedString];
     }
     
     // Handle children
