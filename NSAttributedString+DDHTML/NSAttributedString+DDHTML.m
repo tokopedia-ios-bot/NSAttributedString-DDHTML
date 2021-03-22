@@ -40,7 +40,19 @@
     return [self attributedStringFromHTML:htmlString
                                normalFont:preferredBodyFont
                                  boldFont:[UIFont boldSystemFontOfSize:preferredBodyFont.pointSize]
-                               italicFont:[UIFont italicSystemFontOfSize:preferredBodyFont.pointSize]];
+                               italicFont:[UIFont italicSystemFontOfSize:preferredBodyFont.pointSize]
+                                textColor:[UIColor blackColor]
+                                linkColor:[UIColor blackColor]];
+}
+
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
+{
+    return [self attributedStringFromHTML:htmlString
+                               normalFont:normalFont
+                                 boldFont:boldFont
+                               italicFont:[UIFont italicSystemFontOfSize:normalFont.pointSize]
+                                textColor:textColor
+                                linkColor:linkColor];
 }
 
 + (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont
@@ -48,32 +60,50 @@
     return [self attributedStringFromHTML:htmlString
                                normalFont:[UIFont preferredFontForTextStyle:UIFontTextStyleBody]
                                  boldFont:boldFont
-                               italicFont:italicFont];
+                               italicFont:italicFont
+                                textColor:[UIColor blackColor]
+                                linkColor:[UIColor blackColor]];
 }
+
 + (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont
 {
     return [self attributedStringFromHTML:htmlString
                                normalFont:normalFont
                                  boldFont:boldFont
                                italicFont:italicFont
-                                 imageMap:@{}];
+                                 imageMap:@{}
+                                textColor:[UIColor blackColor]
+                                linkColor:[UIColor blackColor]];
 }
 
-+ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
 {
+    return [self attributedStringFromHTML:htmlString
+                               normalFont:normalFont
+                                 boldFont:boldFont
+                               italicFont:italicFont
+                                 imageMap:@{}
+                                textColor:textColor
+                                linkColor:linkColor];
+}
+
++ (NSAttributedString *)attributedStringFromHTML:(NSString *)htmlString normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
+{
+    NSString *newString = [self stringByDecodingHTMLEntities:htmlString];
+    
     // Parse HTML string as XML document using UTF-8 encoding
-    NSData *documentData = [htmlString dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *documentData = [newString dataUsingEncoding:NSUTF8StringEncoding];
     xmlDoc *document = htmlReadMemory(documentData.bytes, (int)documentData.length, nil, "UTF-8", HTML_PARSE_NOWARNING | HTML_PARSE_NOERROR);
     
     if (document == NULL) {
-        return [[NSAttributedString alloc] initWithString:htmlString attributes:nil];
+        return [[NSAttributedString alloc] initWithString:newString attributes:nil];
     }
     
     NSMutableAttributedString *finalAttributedString = [[NSMutableAttributedString alloc] init];
     
     xmlNodePtr currentNode = document->children;
     while (currentNode != NULL) {
-        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap];
+        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap textColor:textColor linkColor:linkColor];
         [finalAttributedString appendAttributedString:childString];
         
         currentNode = currentNode->next;
@@ -84,19 +114,23 @@
     return finalAttributedString;
 }
 
-+ (NSAttributedString *)attributedStringFromNode:(xmlNodePtr)xmlNode normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap
++ (NSAttributedString *)attributedStringFromNode:(xmlNodePtr)xmlNode normalFont:(UIFont *)normalFont boldFont:(UIFont *)boldFont italicFont:(UIFont *)italicFont imageMap:(NSDictionary<NSString *, UIImage *> *)imageMap textColor:(UIColor *)textColor linkColor:(UIColor *)linkColor
 {
     NSMutableAttributedString *nodeAttributedString = [[NSMutableAttributedString alloc] init];
     
     if ((xmlNode->type != XML_ENTITY_REF_NODE) && ((xmlNode->type != XML_ELEMENT_NODE) && xmlNode->content != NULL)) {
-        NSAttributedString *normalAttributedString = [[NSAttributedString alloc] initWithString:[NSString stringWithCString:(const char *)xmlNode->content encoding:NSUTF8StringEncoding] attributes:@{NSFontAttributeName : normalFont}];
+        NSAttributedString *normalAttributedString = [[NSAttributedString alloc] initWithString:[NSString stringWithCString:(const char *)xmlNode->content encoding:NSUTF8StringEncoding] attributes:@{
+            NSFontAttributeName:normalFont,
+            NSForegroundColorAttributeName:textColor
+        }];
+        
         [nodeAttributedString appendAttributedString:normalAttributedString];
     }
     
     // Handle children
     xmlNodePtr currentNode = xmlNode->children;
     while (currentNode != NULL) {
-        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap];
+        NSAttributedString *childString = [self attributedStringFromNode:currentNode normalFont:normalFont boldFont:boldFont italicFont:italicFont imageMap:imageMap textColor:textColor linkColor:linkColor];
         [nodeAttributedString appendAttributedString:childString];
         
         currentNode = currentNode->next;
@@ -304,6 +338,10 @@
             }
             
             [nodeAttributedString addAttribute:NSParagraphStyleAttributeName value:paragraphStyle range:nodeAttributedStringRange];
+            
+            if ([attributeDictionary objectForKey:@"style"]) {
+                [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:nodeAttributedStringRange];
+            }
 			
 			// MR - For some reason they are not adding the paragraph space when parsing the <p> tag
 			[nodeAttributedString appendAttributedString:[[NSAttributedString alloc] initWithString:@"\n"]];
@@ -311,19 +349,34 @@
 
 
         // Links
-        else if (strncmp("a href", (const char *)xmlNode->name, strlen((const char *)xmlNode->name)) == 0) {
+        else if (strncmp("a", (const char *)xmlNode->name, strlen((const char *)xmlNode->name)) == 0) {
             
             xmlChar *value = xmlNodeListGetString(xmlNode->doc, xmlNode->xmlChildrenNode, 1);
             if (value)
             {
                 NSString *title = [NSString stringWithCString:(const char *)value encoding:NSUTF8StringEncoding];
                 NSString *link = attributeDictionary[@"href"];
+                NSRange range = NSMakeRange(0, title.length);
                 // Sometimes, an a tag may not have a corresponding href attribute.
-		// This should not be added as an attribute.
-		if (link)
-		{
-                    [nodeAttributedString addAttribute:NSLinkAttributeName value:link range:NSMakeRange(0, title.length)];
-		}
+                // This should not be added as an attribute.
+                if (link) {
+                    NSURL *url = [[NSURL alloc] initWithString:link];
+
+                    // test if this url is valid or not. if not, don't add
+                    if (url && url.scheme && url.host) {
+                        [nodeAttributedString addAttribute:NSLinkAttributeName value:url range:range];
+                    }
+                }
+                
+                [nodeAttributedString addAttributes:@{
+                    NSForegroundColorAttributeName: linkColor,
+                    NSFontAttributeName: boldFont,
+                    NSUnderlineColorAttributeName: [UIColor clearColor]
+                } range:range];
+                
+                if ([attributeDictionary objectForKey:@"style"]) {
+                    [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:range];
+                }
             }
         }
         
@@ -357,9 +410,38 @@
                 }
             #endif
         }
+        
+        // span tag
+        else if (strncmp("span", (const char *)xmlNode->name, strlen((const char *)xmlNode->name)) == 0) {
+            if ([attributeDictionary objectForKey:@"style"]) {
+                [self handleInlineStyle:[attributeDictionary[@"style"] lowercaseString] string:nodeAttributedString range:nodeAttributedStringRange];
+            }
+        }
     }
     
     return nodeAttributedString;
+}
+
++ (void)handleInlineStyle:(NSString *)style string:(NSMutableAttributedString *)string range:(NSRange)range {
+    NSArray *styleAttributes = [style componentsSeparatedByString:@";"];
+    for (NSString *styleAttribute in styleAttributes) {
+        NSArray *attribute = [styleAttribute componentsSeparatedByString:@":"];
+        if (attribute.count > 1) {
+            NSString *key = [attribute[0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *value = [attribute[1]  stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            
+            if ([key isEqualToString:@"color"]) {
+                if ([value hasPrefix:@"#"]) {
+                    UIColor *foregroundColor = [self colorFromHexString:value];
+                    [string addAttribute:NSForegroundColorAttributeName value:foregroundColor range:range];
+                }
+                else if ([value hasPrefix:@"rgb"]) {
+                    UIColor *foregroundColor = [self colorFromRGBString:value];
+                    [string addAttribute:NSForegroundColorAttributeName value:foregroundColor range:range];
+                }
+            }
+        }
+    }
 }
 
 + (UIFont *)fontOrSystemFontForName:(NSString *)fontName size:(CGFloat)fontSize {
@@ -380,6 +462,131 @@
     NSUInteger hexValue = strtoul([hexString cStringUsingEncoding:NSUTF8StringEncoding], &p, 16);
 
     return [UIColor colorWithRed:((hexValue & 0xff0000) >> 16) / 255.0 green:((hexValue & 0xff00) >> 8) / 255.0 blue:(hexValue & 0xff) / 255.0 alpha:1.0];
+}
+
++ (UIColor *)colorFromRGBString:(NSString *)colorString {
+    if (colorString == nil)
+        return nil;
+    
+    colorString = [colorString stringByReplacingOccurrencesOfString:@"rgba(" withString:@""];
+    colorString = [colorString stringByReplacingOccurrencesOfString:@"rgb(" withString:@""];
+    colorString = [colorString stringByReplacingOccurrencesOfString:@")" withString:@""];
+    colorString = [colorString stringByReplacingOccurrencesOfString:@" " withString:@""];
+    
+    NSArray *colorComponents = [colorString componentsSeparatedByString:@","];
+    double red = 0;
+    double blue = 0;
+    double green = 0;
+    double alpha = 0;
+    if (colorComponents.count > 0) {
+        red = [colorComponents[0] doubleValue];
+    }
+    if (colorComponents.count > 1) {
+        blue = [colorComponents[1] doubleValue];
+    }
+    if (colorComponents.count > 2) {
+        green = [colorComponents[2] doubleValue];
+    }
+    if (colorComponents.count > 3) {
+        alpha = [colorComponents[3] doubleValue];
+    }
+    
+    return [UIColor colorWithRed:red / 255.0 green:green / 255.0 blue:blue / 255.0 alpha:alpha];
+}
+
+/// source: https://stackoverflow.com/a/1453142/1249118
++ (NSString *)stringByDecodingHTMLEntities:(NSString *)string {
+    NSUInteger myLength = [string length];
+    NSUInteger ampIndex = [string rangeOfString:@"&" options:NSLiteralSearch].location;
+
+    // Short-circuit if there are no ampersands.
+    if (ampIndex == NSNotFound) {
+        return string;
+    }
+    // Make result string with some extra capacity.
+    NSMutableString *result = [NSMutableString stringWithCapacity:(myLength * 1.25)];
+
+    // First iteration doesn't need to scan to & since we did that already, but for code simplicity's sake we'll do it again with the scanner.
+    NSScanner *scanner = [NSScanner scannerWithString:string];
+
+    [scanner setCharactersToBeSkipped:nil];
+
+    NSCharacterSet *boundaryCharacterSet = [NSCharacterSet characterSetWithCharactersInString:@" \t\n\r;"];
+
+    do {
+        // Scan up to the next entity or the end of the string.
+        NSString *nonEntityString;
+        if ([scanner scanUpToString:@"&" intoString:&nonEntityString]) {
+            [result appendString:nonEntityString];
+        }
+        if ([scanner isAtEnd]) {
+            goto finish;
+        }
+        // Scan either a HTML or numeric character entity reference.
+        if ([scanner scanString:@"&amp;" intoString:NULL])
+            [result appendString:@"&"];
+        else if ([scanner scanString:@"&apos;" intoString:NULL])
+            [result appendString:@"'"];
+        else if ([scanner scanString:@"&quot;" intoString:NULL])
+            [result appendString:@"\""];
+        else if ([scanner scanString:@"&lt;" intoString:NULL])
+            [result appendString:@"<"];
+        else if ([scanner scanString:@"&gt;" intoString:NULL])
+            [result appendString:@">"];
+        else if ([scanner scanString:@"&#" intoString:NULL]) {
+            BOOL gotNumber;
+            unsigned charCode;
+            NSString *xForHex = @"";
+
+            // Is it hex or decimal?
+            if ([scanner scanString:@"x" intoString:&xForHex]) {
+                gotNumber = [scanner scanHexInt:&charCode];
+            }
+            else {
+                gotNumber = [scanner scanInt:(int*)&charCode];
+            }
+
+            if (gotNumber) {
+                [result appendFormat:@"%C", (unichar)charCode];
+
+                [scanner scanString:@";" intoString:NULL];
+            }
+            else {
+                NSString *unknownEntity = @"";
+
+                [scanner scanUpToCharactersFromSet:boundaryCharacterSet intoString:&unknownEntity];
+
+
+                [result appendFormat:@"&#%@%@", xForHex, unknownEntity];
+
+                //[scanner scanUpToString:@";" intoString:&unknownEntity];
+                //[result appendFormat:@"&#%@%@;", xForHex, unknownEntity];
+                NSLog(@"Expected numeric character entity but got &#%@%@;", xForHex, unknownEntity);
+
+            }
+
+        }
+        else {
+            NSString *amp;
+
+            [scanner scanString:@"&" intoString:&amp];  //an isolated & symbol
+            [result appendString:amp];
+
+            /*
+            NSString *unknownEntity = @"";
+            [scanner scanUpToString:@";" intoString:&unknownEntity];
+            NSString *semicolon = @"";
+            [scanner scanString:@";" intoString:&semicolon];
+            [result appendFormat:@"%@%@", unknownEntity, semicolon];
+            NSLog(@"Unsupported XML character entity %@%@", unknownEntity, semicolon);
+             */
+        }
+
+    }
+    while (![scanner isAtEnd]);
+
+finish:
+    return result;
 }
 
 @end
